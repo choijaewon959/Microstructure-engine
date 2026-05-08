@@ -262,6 +262,30 @@ def test_add_order_imbalance_requires_bid_and_ask_size_columns() -> None:
         add_order_imbalance(quotes)
 
 
+def test_quote_features_on_mixed_symbols_yield_expected_values() -> None:
+    quotes = pd.DataFrame(
+        {
+            "symbol": ["GS", "MS"],
+            "bid_price": [99.0, 49.5],
+            "ask_price": [101.0, 50.5],
+            "bid_size": [150.0, 25.0],
+            "ask_size": [50.0, 75.0],
+        },
+    )
+
+    featured = add_mid_price(quotes)
+    featured = add_quoted_spread(featured)
+    featured = add_relative_spread(featured)
+    featured = add_quoted_depth(featured)
+    featured = add_order_imbalance(featured)
+
+    assert featured["mid_price"].tolist() == [100.0, 50.0]
+    assert featured["quoted_spread"].tolist() == [2.0, 1.0]
+    assert featured["relative_spread"].tolist() == [0.02, 0.02]
+    assert featured["quoted_depth"].tolist() == [200.0, 100.0]
+    assert featured["order_imbalance"].tolist() == [0.5, -0.5]
+
+
 def test_add_rolling_volatility_uses_log_return_rolling_std() -> None:
     quotes = pd.DataFrame({"mid_price": [100.0, 101.0, 102.0, 103.0]})
 
@@ -283,20 +307,42 @@ def test_add_rolling_volatility_uses_log_return_rolling_std() -> None:
     )
 
 
-def test_add_rolling_volatility_calculates_independently_per_group() -> None:
+def test_add_rolling_volatility_calculates_expected_values_independently_per_group() -> None:
     quotes = pd.DataFrame(
         {
-            "symbol": ["GS", "GS", "MS", "MS"],
-            "mid_price": [100.0, 101.0, 200.0, 202.0],
+            "symbol": ["GS", "GS", "GS", "MS", "MS", "MS"],
+            "mid_price": [100.0, 101.0, 102.0, 200.0, 202.0, 204.0],
         },
     )
 
-    featured = add_rolling_volatility(quotes, window=2, min_periods=1, group_col="symbol")
+    featured = add_rolling_volatility(quotes, window=2, min_periods=2, group_col="symbol")
+    gs_returns = pd.Series(
+        [
+            float("nan"),
+            math.log(101.0 / 100.0),
+            math.log(102.0 / 101.0),
+        ],
+    )
+    ms_returns = pd.Series(
+        [
+            float("nan"),
+            math.log(202.0 / 200.0),
+            math.log(204.0 / 202.0),
+        ],
+    )
+    expected = pd.concat(
+        [
+            gs_returns.rolling(window=2, min_periods=2).std(),
+            ms_returns.rolling(window=2, min_periods=2).std(),
+        ],
+        ignore_index=True,
+    )
 
-    assert pd.isna(featured.loc[0, "rolling_volatility"])
-    assert pd.isna(featured.loc[1, "rolling_volatility"])
-    assert pd.isna(featured.loc[2, "rolling_volatility"])
-    assert pd.isna(featured.loc[3, "rolling_volatility"])
+    pd.testing.assert_series_equal(
+        featured["rolling_volatility"],
+        expected,
+        check_names=False,
+    )
 
 
 def test_add_rolling_volatility_returns_nan_for_non_positive_prices() -> None:
@@ -372,6 +418,22 @@ def test_add_trade_direction_proxy_requires_trade_price_and_mid_columns() -> Non
 
     with pytest.raises(FeatureCalculationError, match="missing required columns"):
         add_trade_direction_proxy(trades)
+
+
+def test_trade_features_on_mixed_symbols_yield_expected_values() -> None:
+    trades = pd.DataFrame(
+        {
+            "symbol": ["GS", "MS", "SPY"],
+            "last": [101.0, 49.5, 400.0],
+            "mid_price": [100.0, 50.0, 400.0],
+        },
+    )
+
+    featured = add_trade_direction_proxy(trades)
+    featured = add_effective_spread(featured)
+
+    assert featured["trade_direction"].tolist() == [1.0, -1.0, 0.0]
+    assert featured["effective_spread"].tolist() == [2.0, 1.0, 0.0]
 
 
 def test_add_effective_spread_uses_signed_distance_from_mid_price() -> None:
@@ -492,18 +554,18 @@ def test_add_realized_spread_shifts_future_mid_independently_per_group() -> None
     assert pd.isna(featured.loc[3, "realized_spread"])
 
 
-
-
 def test_add_realized_spread_respects_session_boundaries_when_timestamp_present() -> None:
     trades = pd.DataFrame(
         {
             "symbol": ["GS", "GS", "GS", "GS"],
-            "timestamp": pd.to_datetime([
-                "2024-01-02 15:59:59",
-                "2024-01-02 16:00:00",
-                "2024-01-03 09:30:00",
-                "2024-01-03 09:30:01",
-            ]),
+            "timestamp": pd.to_datetime(
+                [
+                    "2024-01-02 15:59:59",
+                    "2024-01-02 16:00:00",
+                    "2024-01-03 09:30:00",
+                    "2024-01-03 09:30:01",
+                ]
+            ),
             "last": [101.0, 101.5, 102.0, 102.5],
             "mid": [100.0, 100.5, 110.0, 110.5],
             "trade_direction": [1.0, 1.0, 1.0, 1.0],
@@ -516,6 +578,7 @@ def test_add_realized_spread_respects_session_boundaries_when_timestamp_present(
     assert pd.isna(featured.loc[1, "realized_spread"])
     assert featured.loc[2, "realized_spread"] == -17.0
     assert pd.isna(featured.loc[3, "realized_spread"])
+
 
 def test_add_realized_spread_allows_custom_column_names() -> None:
     trades = pd.DataFrame(
