@@ -90,4 +90,3 @@ def load_trades(path: str | Path) -> pd.DataFrame:
     """Load and normalize one raw trade parquet file."""
 
     return load_raw_parquet(path, "trades")
-

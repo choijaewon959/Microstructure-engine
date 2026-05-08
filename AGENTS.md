@@ -26,6 +26,10 @@ The project should be interview-ready and demonstrate market data cleaning, quot
 
 ```text
 microstructure-analytics-dashboard/
+├── .codex/
+│   ├── config.toml
+│   └── hooks/
+│       └── run_quality_checks.sh
 ├── AGENTS.md
 ├── README.md
 ├── pyproject.toml

@@ -46,11 +46,15 @@ def parse_raw_filename(path: str | Path, data_type: str | None = None) -> RawFil
         match = _QUOTE_TRADE_RE.match(file_path.name)
 
     if match is None:
-        raise ValueError(f"Raw filename does not match {inferred_type} convention: {file_path.name}")
+        raise ValueError(
+            f"Raw filename does not match {inferred_type} convention: {file_path.name}"
+        )
 
     fields = match.groupdict()
     if inferred_type in {"quotes", "trades"} and fields["label"] != inferred_type:
-        raise ValueError(f"Filename label {fields['label']!r} does not match folder {inferred_type!r}")
+        raise ValueError(
+            f"Filename label {fields['label']!r} does not match folder {inferred_type!r}"
+        )
 
     return RawFileRecord(
         path=file_path,
@@ -140,4 +144,3 @@ def missing_quote_trade_pairs(inventory: pd.DataFrame) -> pd.DataFrame:
     return missing[["symbol", "frequency", "date", "has_quotes", "has_trades"]].sort_values(
         ["symbol", "date", "frequency"]
     )
-

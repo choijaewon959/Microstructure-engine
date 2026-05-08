@@ -66,4 +66,3 @@ def test_load_trades_rejects_empty_file(tmp_path: Path) -> None:
 def test_load_trades_missing_file() -> None:
     with pytest.raises(FileNotFoundError):
         load_trades("missing.parquet")
-

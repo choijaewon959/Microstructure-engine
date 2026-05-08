@@ -1,0 +1,11 @@
+[features]
+codex_hooks = true
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/run_quality_checks.sh\""
+timeout = 180
+statusMessage = "Running Python linting and tests"
+
