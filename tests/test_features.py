@@ -492,6 +492,31 @@ def test_add_realized_spread_shifts_future_mid_independently_per_group() -> None
     assert pd.isna(featured.loc[3, "realized_spread"])
 
 
+
+
+def test_add_realized_spread_respects_session_boundaries_when_timestamp_present() -> None:
+    trades = pd.DataFrame(
+        {
+            "symbol": ["GS", "GS", "GS", "GS"],
+            "timestamp": pd.to_datetime([
+                "2024-01-02 15:59:59",
+                "2024-01-02 16:00:00",
+                "2024-01-03 09:30:00",
+                "2024-01-03 09:30:01",
+            ]),
+            "last": [101.0, 101.5, 102.0, 102.5],
+            "mid": [100.0, 100.5, 110.0, 110.5],
+            "trade_direction": [1.0, 1.0, 1.0, 1.0],
+        },
+    )
+
+    featured = add_realized_spread(trades, horizon=1, group_col="symbol")
+
+    assert featured.loc[0, "realized_spread"] == 1.0
+    assert pd.isna(featured.loc[1, "realized_spread"])
+    assert featured.loc[2, "realized_spread"] == -17.0
+    assert pd.isna(featured.loc[3, "realized_spread"])
+
 def test_add_realized_spread_allows_custom_column_names() -> None:
     trades = pd.DataFrame(
         {

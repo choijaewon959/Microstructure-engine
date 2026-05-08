@@ -10,7 +10,9 @@ import numpy as np
 
 BID_PRICE_COLUMN: Final = "bid_price"
 ASK_PRICE_COLUMN: Final = "ask_price"
-MID_PRICE_COLUMN: Final = "mid_price"
+MID_PRICE_COLUMN: Final = "mid"
+LEGACY_MID_PRICE_COLUMN: Final = "mid_price"
+TIMESTAMP_COLUMN: Final = "timestamp"
 QUOTED_SPREAD_COLUMN: Final = "quoted_spread"
 RELATIVE_SPREAD_COLUMN: Final = "relative_spread"
 BID_SIZE_COLUMN: Final = "bid_size"
@@ -47,12 +49,20 @@ def _validate_rolling_window(window: int, min_periods: int | None) -> int:
     return resolved_min_periods
 
 
+def _resolve_mid_column(df: pd.DataFrame, mid_col: str) -> str:
+    if mid_col in df.columns:
+        return mid_col
+    if mid_col == MID_PRICE_COLUMN and LEGACY_MID_PRICE_COLUMN in df.columns:
+        return LEGACY_MID_PRICE_COLUMN
+    return mid_col
+
+
 def add_mid_price(
     df: pd.DataFrame,
     *,
     bid_col: str = BID_PRICE_COLUMN,
     ask_col: str = ASK_PRICE_COLUMN,
-    output_col: str = MID_PRICE_COLUMN,
+    output_col: str = LEGACY_MID_PRICE_COLUMN,
 ) -> pd.DataFrame:
     """Add mid price using: mid_price_t = (bid_price_t + ask_price_t) / 2."""
 
@@ -84,7 +94,7 @@ def add_relative_spread(
     *,
     bid_col: str = BID_PRICE_COLUMN,
     ask_col: str = ASK_PRICE_COLUMN,
-    mid_col: str = MID_PRICE_COLUMN,
+    mid_col: str = LEGACY_MID_PRICE_COLUMN,
     output_col: str = RELATIVE_SPREAD_COLUMN,
 ) -> pd.DataFrame:
     """Add relative spread using: relative_spread_t = (ask_price_t - bid_price_t) / mid_price_t."""
@@ -92,10 +102,12 @@ def add_relative_spread(
     _require_columns(df, [bid_col, ask_col])
 
     featured = df.copy()
-    if mid_col not in featured.columns:
+    resolved_mid_col = _resolve_mid_column(featured, mid_col)
+    if resolved_mid_col not in featured.columns:
         featured[mid_col] = (featured[bid_col] + featured[ask_col]) / 2
+        resolved_mid_col = mid_col
 
-    denominator = featured[mid_col].where(featured[mid_col] != 0)
+    denominator = featured[resolved_mid_col].where(featured[resolved_mid_col] != 0)
     featured[output_col] = (featured[ask_col] - featured[bid_col]) / denominator
     return featured
 
@@ -146,7 +158,8 @@ def add_rolling_volatility(
 ) -> pd.DataFrame:
     """Add rolling volatility using the rolling standard deviation of mid-price log returns."""
 
-    required_columns = [price_col] if group_col is None else [price_col, group_col]
+    resolved_price_col = _resolve_mid_column(df, price_col) if price_col in {MID_PRICE_COLUMN, LEGACY_MID_PRICE_COLUMN} else price_col
+    required_columns = [resolved_price_col] if group_col is None else [resolved_price_col, group_col]
     _require_columns(df, required_columns)
     resolved_min_periods = _validate_rolling_window(window, min_periods)
 
@@ -157,14 +170,14 @@ def add_rolling_volatility(
         return np.log(positive_price / positive_price.shift())
 
     if group_col is None:
-        log_returns = calculate_log_returns(featured[price_col])
+        log_returns = calculate_log_returns(featured[resolved_price_col])
         featured[output_col] = log_returns.rolling(
             window=window,
             min_periods=resolved_min_periods,
         ).std()
         return featured
 
-    log_returns = featured.groupby(group_col, sort=False)[price_col].transform(
+    log_returns = featured.groupby(group_col, sort=False)[resolved_price_col].transform(
         calculate_log_returns
     )
     featured[output_col] = log_returns.groupby(featured[group_col], sort=False).transform(
@@ -182,10 +195,11 @@ def add_trade_direction_proxy(
 ) -> pd.DataFrame:
     """Add trade direction proxy using: trade_direction_t = sign(last_t - mid_price_t)."""
 
-    _require_columns(df, [trade_price_col, mid_col])
+    resolved_mid_col = _resolve_mid_column(df, mid_col)
+    _require_columns(df, [trade_price_col, resolved_mid_col])
 
     featured = df.copy()
-    featured[output_col] = np.sign(featured[trade_price_col] - featured[mid_col])
+    featured[output_col] = np.sign(featured[trade_price_col] - featured[resolved_mid_col])
     return featured
 
 
@@ -199,14 +213,15 @@ def add_effective_spread(
 ) -> pd.DataFrame:
     """Add effective spread using: 2 * trade_direction_t * (last_t - mid_price_t)."""
 
-    _require_columns(df, [trade_price_col, mid_col])
+    resolved_mid_col = _resolve_mid_column(df, mid_col)
+    _require_columns(df, [trade_price_col, resolved_mid_col])
 
     featured = df.copy()
     if trade_direction_col not in featured.columns:
-        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[mid_col])
+        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[resolved_mid_col])
 
     featured[output_col] = (
-        2 * featured[trade_direction_col] * (featured[trade_price_col] - featured[mid_col])
+        2 * featured[trade_direction_col] * (featured[trade_price_col] - featured[resolved_mid_col])
     )
     return featured
 
@@ -223,7 +238,8 @@ def add_realized_spread(
 ) -> pd.DataFrame:
     """Add realized spread using: 2 * trade_direction_t * (last_t - mid_price_{t+h})."""
 
-    required_columns = [trade_price_col, mid_col]
+    resolved_mid_col = _resolve_mid_column(df, mid_col)
+    required_columns = [trade_price_col, resolved_mid_col]
     if group_col is not None:
         required_columns.append(group_col)
     _require_columns(df, required_columns)
@@ -233,12 +249,15 @@ def add_realized_spread(
 
     featured = df.copy()
     if trade_direction_col not in featured.columns:
-        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[mid_col])
+        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[resolved_mid_col])
 
     if group_col is None:
-        future_mid = featured[mid_col].shift(-horizon)
+        future_mid = featured[resolved_mid_col].shift(-horizon)
     else:
-        future_mid = featured.groupby(group_col, sort=False)[mid_col].shift(-horizon)
+        grouping_keys: list[pd.Series | str] = [group_col]
+        if TIMESTAMP_COLUMN in featured.columns:
+            grouping_keys.append(featured[TIMESTAMP_COLUMN].dt.normalize())
+        future_mid = featured.groupby(grouping_keys, sort=False)[resolved_mid_col].shift(-horizon)
 
     featured[output_col] = (
         2 * featured[trade_direction_col] * (featured[trade_price_col] - future_mid)
