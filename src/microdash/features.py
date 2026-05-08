@@ -158,8 +158,14 @@ def add_rolling_volatility(
 ) -> pd.DataFrame:
     """Add rolling volatility using the rolling standard deviation of mid-price log returns."""
 
-    resolved_price_col = _resolve_mid_column(df, price_col) if price_col in {MID_PRICE_COLUMN, LEGACY_MID_PRICE_COLUMN} else price_col
-    required_columns = [resolved_price_col] if group_col is None else [resolved_price_col, group_col]
+    resolved_price_col = (
+        _resolve_mid_column(df, price_col)
+        if price_col in {MID_PRICE_COLUMN, LEGACY_MID_PRICE_COLUMN}
+        else price_col
+    )
+    required_columns = (
+        [resolved_price_col] if group_col is None else [resolved_price_col, group_col]
+    )
     _require_columns(df, required_columns)
     resolved_min_periods = _validate_rolling_window(window, min_periods)
 
@@ -218,7 +224,9 @@ def add_effective_spread(
 
     featured = df.copy()
     if trade_direction_col not in featured.columns:
-        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[resolved_mid_col])
+        featured[trade_direction_col] = np.sign(
+            featured[trade_price_col] - featured[resolved_mid_col]
+        )
 
     featured[output_col] = (
         2 * featured[trade_direction_col] * (featured[trade_price_col] - featured[resolved_mid_col])
@@ -249,7 +257,9 @@ def add_realized_spread(
 
     featured = df.copy()
     if trade_direction_col not in featured.columns:
-        featured[trade_direction_col] = np.sign(featured[trade_price_col] - featured[resolved_mid_col])
+        featured[trade_direction_col] = np.sign(
+            featured[trade_price_col] - featured[resolved_mid_col]
+        )
 
     if group_col is None:
         future_mid = featured[resolved_mid_col].shift(-horizon)
