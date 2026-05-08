@@ -119,4 +119,3 @@ def test_alignment_validates_required_columns() -> None:
             pd.DataFrame({"timestamp": [pd.Timestamp("2025-01-02")]}),
             pd.DataFrame({"symbol": ["GS"], "timestamp": [pd.Timestamp("2025-01-02")]}),
         )
-

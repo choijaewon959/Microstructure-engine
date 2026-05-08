@@ -98,4 +98,3 @@ def align_trades_to_quotes(
     return aligned_all.sort_values(["symbol", SESSION_DATE_COLUMN, TIMESTAMP_COLUMN]).reset_index(
         drop=True
     )
-

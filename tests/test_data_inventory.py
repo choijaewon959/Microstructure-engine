@@ -67,4 +67,3 @@ def test_missing_quote_trade_pairs(tmp_path: Path) -> None:
         ("GS", "2025-01-03", True, False),
         ("MS", "2025-01-04", False, True),
     }
-

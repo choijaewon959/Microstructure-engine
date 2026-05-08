@@ -21,4 +21,3 @@ def test_sample_csv_files_are_commit_safe_and_readable() -> None:
         assert 0 < len(sample) <= 120
         assert "ts" in sample.columns
         assert "symbol" in sample.columns
-
